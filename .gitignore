@@ -2,3 +2,8 @@ __pycache__/*
 C_Data_*/*
 NC_Data_*/*
 *.ipynb
+grid_search*
+Grid_Search/*
+epsilon_nets/*
+Running_Scripts/*
+Figures

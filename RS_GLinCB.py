@@ -1,7 +1,7 @@
 import numpy as np
-from utils import mat_norm, solve_mle, dsigmoid
 from tqdm import tqdm
 from time import time
+from utils import *
 class RS_GLinCB:
     def __init__(self, params , arm_set, kappa):
         self.name = 'RS-GLinUCB (This work)'
@@ -38,7 +38,7 @@ class RS_GLinCB:
             x = arm_set[i]
             mnorm = mat_norm(x, self.V_inv)**2
             if mnorm > self.warmup_threshold:
-                print("WARMUP THRESHOLD")
+                # print("WARMUP THRESHOLD")
                 if mnorm > max_norm:
                     max_x = x
                     max_norm = mnorm

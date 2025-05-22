@@ -1,18 +1,17 @@
 import numpy as np
 from tqdm import tqdm
 from utils import sigmoid , dsigmoid
-# from NC_Logistic import NC_Logistic_Alg
-from Reduction_Alg import Reduction_Alg
+from Batch_GLinCB import Batch_GLinCB
+from SoftBatch_Contextual import SoftBatch
 
 class LogisticOracle:
 
-    def __init__(self , theta_star , epsilon , reward_rng):
+    def __init__(self , theta_star , reward_rng):
         self.theta_star = theta_star
-        self.misspecification = epsilon
         self.reward_rng = reward_rng
 
     def expected_reward(self , arm):
-        return min(sigmoid(np.dot(self.theta_star , arm)) + self.misspecification , 1)
+        return min(sigmoid(np.dot(self.theta_star , arm)) , 1)
     
     def reward(self , arm):
         return self.reward_rng.binomial(1 , self.expected_reward(arm))
@@ -29,18 +28,17 @@ class Contextual_Logistic:
         
         self.arm_seed = params["arm_seed"]
         self.kappa = self.find_kappa(theta_star)
+        # self.kappa = 150
         print(f"The value of kappa is {self.kappa}")
         self.arm_rng = np.random.default_rng(self.arm_seed) # reset the arm generator
 
         self.reward_rng = np.random.default_rng(params["reward_seed"])
-        self.oracle = LogisticOracle(theta_star , 0 , self.reward_rng)
+        self.oracle = LogisticOracle(theta_star , self.reward_rng)
 
-        self.lmbda = 1 
-        
         self.regret_arr = []
         self.previous_arm_sets = []
         
-        self.alg = Reduction_Alg(params , self.kappa)
+        self.alg = Batch_GLinCB(params , self.kappa) if params["alg_name"] == Batch_GLinCB else SoftBatch(params , self.kappa)
         self.batch_endpoints = self.alg.batch_endpoints
 
 
@@ -58,22 +56,28 @@ class Contextual_Logistic:
         kappa = -np.inf
         for _ in tqdm(range(self.horizon)):
             arms = self.create_arm_set(arm_rng)
+            # if _ <10:
+                # print(arms)
             mu_dot = [dsigmoid(np.dot(theta , arm)) for arm in arms]
             kappa = max(kappa , 1.0/np.min(mu_dot))
         return kappa
 
     
     def run_algorithm(self):
-        print(f"Starting Batch 1")
+        # print(f"Starting Batch 1")
         for t in range(1 , self.horizon + 1):
             arms = self.create_arm_set(self.arm_rng)
             self.previous_arm_sets.append(arms)
             self.best_arm_idx , self.best_arm , self.best_arm_expected_reward = self.find_best_arm(arms)
             
-            theta_recommended = self.alg.play(t)
-            inner_products = [np.dot(arm , theta_recommended) for arm in arms]
-            best_arm_idx = np.argmax(inner_products)
-            arm_played = arms[best_arm_idx]
+            recommendation , type = self.alg.play(t , arms)
+            if type == "arm":
+                arm_played = recommendation
+            else:
+                # returns a theta
+                inner_products = [np.dot(arm , recommendation) for arm in arms]
+                best_arm_idx = np.argmax(inner_products)
+                arm_played = arms[best_arm_idx]
             
             reward = self.oracle.reward(arm_played)
             self.regret_arr.append(self.calculate_regret(arm_played , reward))

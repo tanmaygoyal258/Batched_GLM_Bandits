@@ -1,6 +1,6 @@
 import numpy as np
 from optimization import fit_online_logistic_estimate, fit_online_logistic_estimate_bar
-from utils import sigmoid, dsigmoid, weighted_norm, probit , dprobit
+from utils import *
 from tqdm import tqdm
 from time import time
 

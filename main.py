@@ -20,7 +20,12 @@ def parse_args():
     parser.add_argument('--arm_seed', type = int, default = 456, help = 'random seed for arms')
     parser.add_argument('--theta_seed', type = int, default = 789, help = 'random seed for generating theta star')
     parser.add_argument('--param_norm_ub', type = int, default = 1, help = 'desired norm for theta_star')
+    parser.add_argument('--epsilon_seed', type = int, default = 1234, help = 'random seed for misspecification')
     parser.add_argument('--contextual' , action = "store_true")
+    parser.add_argument('--gamma_constant' , type = float , default = -1)
+    parser.add_argument('--lamda' , type = float, default = -1)
+    parser.add_argument("--directory" , type = str , default = None)
+    parser.add_argument("--epsilon" , type = float , default = -1)
     return parser.parse_args()
 
 
@@ -36,13 +41,14 @@ def main():
     params['reward_seed'] = args.reward_seed
     params['arm_seed'] = args.arm_seed
     params['theta_seed'] = args.theta_seed
+    params["epsilon_seed"] = args.epsilon_seed
     params["param_norm_ub"] = args.param_norm_ub
     params["contextual"] = args.contextual
+    params["gamma_constant"] = args.gamma_constant
+    params["lamda"] = args.lamda
 
     # Store config as a JSON file
-    now = datetime.now()
-    timestamp = now.strftime("%d-%m-%H-%M-%S")
-    print(timestamp)
+    file_name = f"S={args.param_norm_ub}_T={args.horizon}_Num_Arms={args.number_arms}_Arm_seed={args.arm_seed}_Reward_seed={args.reward_seed}_eps={args.epsilon}"
 
     # creating the optimal parameter
     theta_rng = np.random.default_rng(params["theta_seed"])
@@ -50,12 +56,27 @@ def main():
     params["theta_star"] = params["theta_star"] / np.linalg.norm(params["theta_star"]) * params["param_norm_ub"]
     params["theta_star"] = params["theta_star"].tolist()
     
-    nc_epsilon = np.sqrt(params["dimension"]/params["horizon"])
-    if params["alg_name"] == "NC_Logistic":
+    if args.directory is None:
+        if not params["contextual"]:
+            path = "NC_Data_Files_{}/".format(params["alg_name"]) + file_name
+        else:
+            path = "C_Data_Files_{}/".format(params["alg_name"]) + file_name
+    else:
+        path = args.directory
+        if not os.path.exists(path):
+            os.makedirs(path)
+        path = path + "/" + file_name
+    params["path"] = path
+
+
+    nc_epsilon = np.sqrt(params["dimension"]/params["horizon"]) if args.epsilon < 0 else args.epsilon
+    if params["alg_name"] == "SoftBatch" or params["alg_name"] == "Fixed-1" or params["alg_name"] == "SoftBatch_Updated":
         env = Non_Contextual_Logistic(params["theta_star"] , params , nc_epsilon)
         env.run_algorithm()
         regret_arr = env.regret_arr
         batch_endpoints = env.batch_endpoints
+        theta_norms = env.theta_norms
+        best_arms = env.best_arm_gaps
     elif params["alg_name"] == "ada_ofu_ecolog":
         env = GLMEnv(params, params["theta_star"] , nc_epsilon)
         env.play_algorithm()
@@ -68,22 +89,22 @@ def main():
         time_arr = env.time_arr
     elif params["contextual"]:
         env = Contextual_Logistic(params["theta_star"] , params)
-        params["alg_name"] = "Reduction_Alg"
+        # params["alg_name"] = "Batch_GLinCB"
         env.run_algorithm()
         regret_arr = env.regret_arr
         batch_endpoints = env.batch_endpoints
-
-    if not params["contextual"]:
-        path = "NC_Data_Files_{}/".format(params["alg_name"]) + timestamp
     else:
-        path = "C_Data_Files_{}/".format(params["alg_name"]) + timestamp
+        print("Incorrect Algorithm name")
+        return
+
     if not os.path.exists(path):
-        os.makedirs(path)
-    params["path"] = path
+            os.makedirs(path)
+            
     with open(path+"/config.json", "w") as file:
             json.dump(params, file) 
 
     np.save(path + "/regret_array" , regret_arr)
+
     try:
         np.save(path + "/batch_endpoints" , batch_endpoints)
     except:
@@ -92,6 +113,15 @@ def main():
         np.save(path + "/time_arr" , time_arr)
     except:
         pass
-
+    
+    try:
+        np.save(path + "/theta_norms" , theta_norms)
+    except:
+        pass
+    
+    try:
+        np.save(path + "/best_arms" , best_arms)
+    except:
+        pass
 if __name__ == "__main__":
     main()

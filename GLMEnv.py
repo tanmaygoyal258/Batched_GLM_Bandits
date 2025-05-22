@@ -8,16 +8,18 @@ from RS_GLinCB import RS_GLinCB
 
 class LogisticOracle:
 
-    def __init__(self , theta_star , epsilon , reward_rng):
+    def __init__(self , theta_star , reward_rng , misspecification_dict):
         self.theta_star = theta_star
-        self.misspecification = epsilon
         self.reward_rng = reward_rng
+        # self.misspecification_dict = misspecification_dict
 
     def expected_reward(self , arm):
-        return min(sigmoid(np.dot(self.theta_star , arm)) + self.misspecification , 1)
+        # misspecification = self.misspecification_dict[tuple(arm)]
+        return min(sigmoid(np.dot(self.theta_star , arm)) , 1)
     
     def reward(self , arm):
         return self.reward_rng.binomial(1 , self.expected_reward(arm))
+            
     
 class GLMEnv:
 
@@ -25,20 +27,26 @@ class GLMEnv:
         
         self.alg_name = params["alg_name"]
 
-        self.epsilon = epsilon
-        self.reward_rng = np.random.default_rng(params["reward_seed"])
-        self.oracle = LogisticOracle(theta_star , self.epsilon , self.reward_rng)
-
         self.horizon = params["horizon"]
         self.dim = params["dimension"]
         self.contextual = params["contextual"]
         self.number_arms = params["number_arms"]
         self.arm_seed = params["arm_seed"]
-        self.kappa = self.find_kappa(params["theta_star"])
-        print(f"The value of kappa is {self.kappa}")
         
+
         self.arm_rng = np.random.default_rng(params["arm_seed"])
         self.arms = self.create_arm_set(self.arm_rng)
+
+        self.epsilon = epsilon
+        self.reward_seed = params["reward_seed"]
+        print(f"Reward Seed is {self.reward_seed}")
+        self.reward_rng = np.random.default_rng(params["reward_seed"])
+        self.epsilon_rng = np.random.default_rng(params["epsilon_seed"])
+        self.misspecification_dict = {tuple(arm) : self.epsilon_rng.uniform() * 2 * self.epsilon - self.epsilon for arm in self.arms}
+        self.oracle = LogisticOracle(theta_star , self.reward_rng , self.misspecification_dict)
+
+        self.kappa = self.find_kappa(params["theta_star"])
+        print(f"The value of kappa is {self.kappa}")
 
         if self.alg_name == "ada_ofu_ecolog":
             self.alg = ada_OFU_ECOLog(params , self.arms)

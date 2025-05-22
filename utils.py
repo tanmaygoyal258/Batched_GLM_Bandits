@@ -67,14 +67,22 @@ def G_Optimal_Design(arms , dim):
 
         dist = dist / np.sum(dist)
         # assert sum(dist) == 1 , "The distribution is not normalized and has sum {}".format(sum(dist))
-    return dist / np.sum(dist)
+        while dist.sum()!=1:
+            extra = 1 - dist.sum()
+            dist[np.random.randint(len(dist))] += extra
+    return dist
 
 def mat_norm(x , A):
     return np.sqrt(np.dot(x , np.dot(A , x)))
 
 
 def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
+    try:
+        return 1 / (1 + np.exp(-x))
+    except RuntimeWarning as e:
+        print(e)
+        print(x)
+        assert False
 
 def dsigmoid(x):
     return sigmoid(x) * (1 - sigmoid(x))
@@ -90,4 +98,28 @@ def log_loss(theta , arms , rewards , lmbda):
 def solve_mle(theta , arms , rewards , lmbda):
         res = minimize(log_loss , theta , args = (arms , rewards , lmbda))
         new_theta , res_flag = res.x , res.success
+        # print(res.message)
         return new_theta, res_flag
+
+def approximate_additive_oracle(arms , theta, eps , seed):
+    best_val = np.max([np.dot(arm , theta) for arm in arms])
+    np.random.seed(seed)
+    while True:
+        arm_idx = np.random.randint(len(arms))
+        arm = arms[arm_idx]
+        if np.dot(arm , theta) >= best_val - eps:
+            print(f"The best value is {best_val} and returning an arm with value {np.dot(arm , theta)}")
+            return arm
+        
+def approximate_multiplicative_oracle(arms , theta , alpha , seed):
+    best_val = np.max([np.dot(arm , theta) for arm in arms])
+    # print(f"Best arm is {arms[np.argmax([np.dot(arm , theta) for arm in arms])]}")
+    np.random.seed(seed)
+    # print(f"Number of arms which satisfy condition are {len([a for a in arms if np.dot(a , theta) >= alpha * best_val])} ")
+    while True:
+        arm_idx = np.random.randint(len(arms))
+        # print(arm_idx)  
+        arm = arms[arm_idx]
+        if np.dot(arm , theta) >= alpha * best_val:
+            # print(f"Returning {arm}")
+            return arm_idx , arm
