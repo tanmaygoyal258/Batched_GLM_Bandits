@@ -22,7 +22,6 @@ def parse_args():
     parser.add_argument('--param_norm_ub', type = int, default = 1, help = 'desired norm for theta_star')
     parser.add_argument('--epsilon_seed', type = int, default = 1234, help = 'random seed for misspecification')
     parser.add_argument('--contextual' , action = "store_true")
-    parser.add_argument('--gamma_constant' , type = float , default = -1)
     parser.add_argument('--lamda' , type = float, default = -1)
     parser.add_argument("--directory" , type = str , default = None)
     parser.add_argument("--epsilon" , type = float , default = -1)
@@ -44,23 +43,23 @@ def main():
     params["epsilon_seed"] = args.epsilon_seed
     params["param_norm_ub"] = args.param_norm_ub
     params["contextual"] = args.contextual
-    params["gamma_constant"] = args.gamma_constant
     params["lamda"] = args.lamda
 
-    # Store config as a JSON file
+    # Create the file name
     file_name = f"S={args.param_norm_ub}_T={args.horizon}_Num_Arms={args.number_arms}_Arm_seed={args.arm_seed}_Reward_seed={args.reward_seed}_eps={args.epsilon}"
-
+    
     # creating the optimal parameter
     theta_rng = np.random.default_rng(params["theta_seed"])
     params["theta_star"] = np.array([theta_rng.uniform()*2 - 1 for i in range(params['dimension'])])
     params["theta_star"] = params["theta_star"] / np.linalg.norm(params["theta_star"]) * params["param_norm_ub"]
     params["theta_star"] = params["theta_star"].tolist()
-    
+
+    # Check for validity of folder    
     if args.directory is None:
         if not params["contextual"]:
-            path = "NC_Data_Files_{}/".format(params["alg_name"]) + file_name
+            path = "Results/NC_Data_Files_{}/".format(params["alg_name"]) + file_name
         else:
-            path = "C_Data_Files_{}/".format(params["alg_name"]) + file_name
+            path = "Results/C_Data_Files_{}/".format(params["alg_name"]) + file_name
     else:
         path = args.directory
         if not os.path.exists(path):
@@ -69,42 +68,50 @@ def main():
     params["path"] = path
 
 
+    # set epislon for misclassification
     nc_epsilon = np.sqrt(params["dimension"]/params["horizon"]) if args.epsilon < 0 else args.epsilon
-    if params["alg_name"] == "SoftBatch" or params["alg_name"] == "Fixed-1" or params["alg_name"] == "SoftBatch_Updated":
+    
+    # set the environment and run the algorithm
+    if params["alg_name"] == "SoftBatch":
+        if params["contextual"]:
+            env = Contextual_Logistic(params["theta_star"] , params)
+        else:
+            env = Non_Contextual_Logistic(params["theta_star"] , params , nc_epsilon)
+        env.run_algorithm()
+        regret_arr = env.regret_arr
+        batch_endpoints = env.batch_endpoints
+        try:
+            theta_norms = env.theta_norms
+            best_arms = env.best_arm_gaps
+        except:
+            pass
+    elif params["alg_name"] == "BatchGLinCB-Fixed":
         env = Non_Contextual_Logistic(params["theta_star"] , params , nc_epsilon)
         env.run_algorithm()
         regret_arr = env.regret_arr
         batch_endpoints = env.batch_endpoints
         theta_norms = env.theta_norms
         best_arms = env.best_arm_gaps
-    elif params["alg_name"] == "ada_ofu_ecolog":
-        env = GLMEnv(params, params["theta_star"] , nc_epsilon)
-        env.play_algorithm()
+    elif params["alg_name"] == "BatchGLinCB":
+        env = Contextual_Logistic(params["theta_star"] , params)
+        env.run_algorithm()
         regret_arr = env.regret_arr
-        time_arr = env.time_arr
+        batch_endpoints = env.batch_endpoints
     elif params["alg_name"] == "RS_GLinCB":
         env = GLMEnv(params, params["theta_star"] , nc_epsilon)
         env.play_algorithm()
         regret_arr = env.regret_arr
         time_arr = env.time_arr
-    elif params["contextual"]:
-        env = Contextual_Logistic(params["theta_star"] , params)
-        # params["alg_name"] = "Batch_GLinCB"
-        env.run_algorithm()
-        regret_arr = env.regret_arr
-        batch_endpoints = env.batch_endpoints
     else:
         print("Incorrect Algorithm name")
         return
 
+    # Dump the JSON and save the results retrieved
     if not os.path.exists(path):
             os.makedirs(path)
-            
     with open(path+"/config.json", "w") as file:
             json.dump(params, file) 
-
     np.save(path + "/regret_array" , regret_arr)
-
     try:
         np.save(path + "/batch_endpoints" , batch_endpoints)
     except:
@@ -113,15 +120,16 @@ def main():
         np.save(path + "/time_arr" , time_arr)
     except:
         pass
-    
     try:
         np.save(path + "/theta_norms" , theta_norms)
     except:
         pass
-    
     try:
         np.save(path + "/best_arms" , best_arms)
     except:
         pass
+
+    print(f"Reward Seed:{params['reward_seed']}: Kappa:{env.kappa} , Regret: {np.sum(regret_arr)}")
+
 if __name__ == "__main__":
     main()
