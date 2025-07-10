@@ -18,8 +18,8 @@ class RS_GLinCB:
         self.beta = 4* np.sqrt(self.d* np.log(self.T/self.delta))
         self.V_inv = (1.0 / self.lmbda) * np.eye(self.d)
         self.curr_H = self.lmbda * np.eye(self.d)
-        # self.prev_H = 0 * np.eye(self.d)
-        self.prev_H = self.curr_H.copy()
+        self.prev_H = 0 * np.eye(self.d)
+        # self.prev_H = self.curr_H.copy()
         self.warmup_threshold = 1.0 / (0.01 * self.kappa * self.S**2 * self.d)
         self.t = 1
         self.theta_hat_w = np.zeros((self.d,))
@@ -28,6 +28,7 @@ class RS_GLinCB:
         self.non_warm_up_X, self.non_warm_up_Y = [], []
         self.warmup_flag = False
         self.e = np.exp(1.0)
+        self.model = "Logistic"
     
 
     def pull(self , arm_set):
@@ -54,8 +55,8 @@ class RS_GLinCB:
             # Check determinant
             if np.linalg.det(self.curr_H) >= ((1 + self.doubling_constant) * np.linalg.det(self.prev_H)):
                 self.prev_H = self.curr_H
-                thth, succ_flag = solve_mle(self.theta_hat_tau, np.array(self.non_warm_up_X), \
-                                                np.array(self.non_warm_up_Y), self.lmbda/2)
+                thth, succ_flag = solve_glm_mle(self.theta_hat_tau, np.array(self.non_warm_up_X), \
+                                                np.array(self.non_warm_up_Y), self.lmbda/2, self.model)
                 if succ_flag:
                     self.theta_hat_tau = thth
             
@@ -94,8 +95,8 @@ class RS_GLinCB:
             self.warm_up_Y.append(reward)
             self.non_warm_up_X.append(picked_arm)
             self.non_warm_up_Y.append(reward)
-            thth, succ_flag = solve_mle((self.theta_hat_w + self.theta_hat_tau)/2, np.array(self.warm_up_X), \
-                                                np.array(self.warm_up_Y), self.lmbda/2)
+            thth, succ_flag = solve_glm_mle((self.theta_hat_w + self.theta_hat_tau)/2, np.array(self.warm_up_X), \
+                                                np.array(self.warm_up_Y), self.lmbda/2, self.model)
             if succ_flag:
                 self.theta_hat_w = thth # update theta_hat_w if mle solution was successful
         
@@ -103,9 +104,12 @@ class RS_GLinCB:
         else:
             self.non_warm_up_X.append(picked_arm)
             self.non_warm_up_Y.append(reward)
-            mudp = dsigmoid(np.dot(picked_arm, self.theta_hat_w))
+            if self.model == 'Logistic':
+                mudp = dsigmoid(np.dot(self.arms[self.a_t], self.theta_hat_w))
+            elif self.model == 'Probit':
+                mudp = dprobit(np.dot(self.arms[self.a_t], self.theta_hat_w))
             # Update current H matrix
-            self.curr_H += mudp  * np.outer(picked_arm, picked_arm)
+            self.curr_H += mudp  * np.outer(self.arms[self.a_t], self.arms[self.a_t])
         
         self.t += 1
             

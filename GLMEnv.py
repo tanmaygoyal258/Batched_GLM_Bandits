@@ -2,23 +2,31 @@ import numpy as np
 from time import time
 from tqdm import tqdm
 from utils import dsigmoid , sigmoid
-from ada_OFU_ECOLog import ada_OFU_ECOLog
 from RS_GLinCB import RS_GLinCB
 
 
 class LogisticOracle:
+    """
+    A class to implement a Logistic reward oracle.
+    Initialization:
+        theta_star: the optimal reward vector (unknown to the algorithm)
+        reward_rng: a random generator for the rewards
+        misspecification_dict: a dictionary containing the permissible misspecification values for each arm
+    """
 
     def __init__(self , theta_star , reward_rng , misspecification_dict):
         self.theta_star = theta_star
         self.reward_rng = reward_rng
-        # self.misspecification_dict = misspecification_dict
+        self.misspecification_dict = misspecification_dict
 
     def expected_reward(self , arm):
-        # misspecification = self.misspecification_dict[tuple(arm)]
-        return min(sigmoid(np.dot(self.theta_star , arm)) , 1)
+        misspecification = self.misspecification_dict[tuple(arm)]
+        # ensure expected reward is between 0 and 1
+        return max(0 , min(sigmoid(np.dot(self.theta_star , arm)) + misspecification , 1))
     
     def reward(self , arm):
-        return self.reward_rng.binomial(1 , self.expected_reward(arm))
+        reward = self.reward_rng.binomial(1 , self.expected_reward(arm))
+        return reward
             
     
 class GLMEnv:
@@ -33,31 +41,29 @@ class GLMEnv:
         self.number_arms = params["number_arms"]
         self.arm_seed = params["arm_seed"]
         
-
         self.arm_rng = np.random.default_rng(params["arm_seed"])
         self.arms = self.create_arm_set(self.arm_rng)
 
         self.epsilon = epsilon
         self.reward_seed = params["reward_seed"]
-        print(f"Reward Seed is {self.reward_seed}")
         self.reward_rng = np.random.default_rng(params["reward_seed"])
         self.epsilon_rng = np.random.default_rng(params["epsilon_seed"])
         self.misspecification_dict = {tuple(arm) : self.epsilon_rng.uniform() * 2 * self.epsilon - self.epsilon for arm in self.arms}
         self.oracle = LogisticOracle(theta_star , self.reward_rng , self.misspecification_dict)
 
         self.kappa = self.find_kappa(params["theta_star"])
-        print(f"The value of kappa is {self.kappa}")
 
-        if self.alg_name == "ada_ofu_ecolog":
-            self.alg = ada_OFU_ECOLog(params , self.arms)
-        elif self.alg_name == "RS_GLinCB":
+        if self.alg_name == "RS_GLinCB":
             self.alg = RS_GLinCB(params , self.arms , self.kappa)        
+        
         self.regret_arr = []
         self.time_arr = []
 
     def find_kappa(self , theta):
+        """
+        finds kappa for a given arm set (with repsect to theta_star)
+        """
         if self.contextual:
-            print(f"Calculating kappa")
             arm_rng = np.random.default_rng(self.arm_seed)
             kappa = -np.inf
             for _ in tqdm(range(self.horizon)):
@@ -73,7 +79,9 @@ class GLMEnv:
     
     def play_algorithm(self):
         for _ in tqdm(range(self.horizon)):
-            
+            """
+            runs the algorithm in the standard format: choose an arm, obtain reward, update params
+            """
             # obtain the arms
             if self.contextual:
                 self.arms = self.create_arm_set(self.arm_rng)
@@ -101,6 +109,9 @@ class GLMEnv:
         return self.regret_arr , self.time_arr
 
     def find_best_arm(self):
+        """
+        returns the best arm index, the best arm, and the expected reward for this arm given an arm set
+        """
         expected_rewards = [self.oracle.expected_reward(arm) for arm in self.arms]
         best_arm_idx = np.argmax(expected_rewards)
         best_arm = self.arms[best_arm_idx]
@@ -109,6 +120,9 @@ class GLMEnv:
         return best_arm_idx , best_arm , best_arm_expected_reward
     
     def create_arm_set(self , arm_rng):
+        """
+        creates an arm set using a random generator
+        """
         arms = []
         for a in range(self.number_arms):
             arm = [arm_rng.random()*2 - 1 for i in range(self.dim)]
