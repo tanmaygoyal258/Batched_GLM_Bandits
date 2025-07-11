@@ -63,7 +63,7 @@ class Contextual_Logistic:
     
     def find_kappa(self , theta):
         """
-        finds kappa (with repsect to theta_star)
+        finds kappa (with respect to theta_star)
         """
         # sets the random generator for the arms
         arm_rng = np.random.default_rng(self.arm_seed)

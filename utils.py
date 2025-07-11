@@ -60,7 +60,6 @@ def G_Optimal_Design(arms , dim):
     calculates a G-optimal design using the Frank-Wolfe algorithm
     Implementation of the algorithm given in Bandit Algorithms.
     """
-
     dist = np.array([1/len(arms) for _ in range(len(arms))])
 
     objective = -1
