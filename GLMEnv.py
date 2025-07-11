@@ -14,13 +14,16 @@ class LogisticOracle:
         misspecification_dict: a dictionary containing the permissible misspecification values for each arm
     """
 
-    def __init__(self , theta_star , reward_rng , misspecification_dict):
+    def __init__(self , theta_star , reward_rng , misspecification_dict , contextual):
         self.theta_star = theta_star
         self.reward_rng = reward_rng
         self.misspecification_dict = misspecification_dict
-
+        self.contextual = contextual
     def expected_reward(self , arm):
-        misspecification = self.misspecification_dict[tuple(arm)]
+        if not self.contextual:
+            misspecification = self.misspecification_dict[tuple(arm)]
+        else:
+            misspecification = 0
         # ensure expected reward is between 0 and 1
         return max(0 , min(sigmoid(np.dot(self.theta_star , arm)) + misspecification , 1))
     
@@ -49,7 +52,7 @@ class GLMEnv:
         self.reward_rng = np.random.default_rng(params["reward_seed"])
         self.epsilon_rng = np.random.default_rng(params["epsilon_seed"])
         self.misspecification_dict = {tuple(arm) : self.epsilon_rng.uniform() * 2 * self.epsilon - self.epsilon for arm in self.arms}
-        self.oracle = LogisticOracle(theta_star , self.reward_rng , self.misspecification_dict)
+        self.oracle = LogisticOracle(theta_star , self.reward_rng , self.misspecification_dict , self.contextual)
 
         self.kappa = self.find_kappa(params["theta_star"])
 

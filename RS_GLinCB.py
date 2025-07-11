@@ -13,7 +13,7 @@ class RS_GLinCB:
         self.delta= params["failure_level"]
         self.kappa = kappa   
         self.doubling_constant = 0.5
-        self.lmbda = 0.5 #self.d * np.log(self.T /self.delta)/self.R**2
+        self.lmbda = 0.5 #self.d * np.log(self.T /self.delta)
         self.gamma = self.S* np.sqrt(self.d*np.log(self.T/self.delta))
         self.beta = 4* np.sqrt(self.d* np.log(self.T/self.delta))
         self.V_inv = (1.0 / self.lmbda) * np.eye(self.d)
